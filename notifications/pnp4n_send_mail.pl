@@ -2,14 +2,14 @@
 #
 # First we explicitly switch off the Nagios embbeded Perl Interpreter
 # nagios: -epn
-# ######################### pnp4n_send_service_mail.pl ################ #
+# ################################# pnp4n_send_mail.pl ################ #
 # Date    : May 29, 2012                                                #
-# Purpose : Script to send out Nagios service e-mails.\n";              #
+# Purpose : Script to send out Nagios e-mails.\n";                      #
 # Author  : Frank Migge (support at frank4dd dot com), Robert Becht     #
 # Help    : http://nagios.frank4dd.com/howto                            #
 # Licence : GPL - http://www.fsf.org/licenses/gpl.txt                   #
 #           Written for and verified with Nagios version 3.3.1          #
-# Help    : ./pnp4n_send_service_mail.pl -h                             #
+# Help    : ./pnp4n_send_mail.pl -h                                     #
 #                                                                       #
 # Version : 1.0 initial release                                         #
 # Version : 1.1 add multipart MIME and logo                             #
@@ -29,7 +29,7 @@
 # Depends : perl-Mail-Sendmail (Mail::Sendmail)                         #
 #           perl-MIME-tools (MIME::Base64)                              #
 #           perl-libwww-perl-6.03-2.1.2.noarch (LWP)                    #
-#           libnetpbm (conversion png-to-jpg)                           #
+#           libnetpbm (conversion png-to-jpg, this is optional)         #
 #           netpbm (see above)                                          #
 # ##################################################################### #
 use Getopt::Long;
@@ -45,8 +45,8 @@ use vars qw( $logo_id $graph_id $tmpfile $land $tbl $var
 # The version of this script
 my $Version            ='1.7.3';
 # the sender e-mail address to be seen by recipients
-my $mail_sender        = "Nagios Monitoring <nagiosadmin\@frank4dd.com>";
-# The Nagios CGI URL for integrated service links
+my $mail_sender        = "Nagios Monitoring <nagios\@frank4dd.com>";
+# The Nagios CGI URL for integrated links
 my $nagios_cgiurl      = "http://nagios.frank4dd.com/nagios/cgi-bin";
 # Here we define a simple HTML stylesheet to be used in the HTML header.
 my $html_style         = "body {text-align: center; font-family: Verdana, sans-serif; font-size: 10pt;}\n"
@@ -85,8 +85,8 @@ my $graph_history      = 48; # in hours, a good range is between 12...48
 # ########################################################################
 my $pnp4nagios_auth    = undef; # $pnp4nagios_auth    = "true";
 my $server_port        = undef; # $server_port        = "nagios.frank4dd.com:80";
-my $auth_name          = undef; # $auth_name          = "pnp4nagios";
-my $web_user           = undef; # $web_user           = "pnp4nget";
+my $auth_name          = undef; # $auth_name          = "nagios";
+my $web_user           = undef; # $web_user           = "guest";
 my $web_pass           = undef; # $web_pass           = "mypass";
 
 # ########################################################################
@@ -95,7 +95,7 @@ my $web_pass           = undef; # $web_pass           = "mypass";
 # If the mailserver requires auth, an example is further down the code.
 # ########################################################################
 my $o_smtphost         = "192.168.1.64";
-my $domain 	       = "\@frank4dd.com"; # this is only for -g groups
+my $domain             = "\@yourdomain"; # only for -g group
 my @listaddress        = ();
 
 # ########################################################################
@@ -210,7 +210,11 @@ my $o_hostalias        = $ENV{NAGIOS_HOSTALIAS};
 my $o_hostgroup        = $ENV{NAGIOS_HOSTGROUPNAME};
 # Nagios monitored host IP address
 my $o_hostaddress      = $ENV{NAGIOS_HOSTADDRESS};
-# Nagios service check output data
+# Nagios monitored host state, i.e. DOWN
+my $o_hoststate        = $ENV{NAGIOS_HOSTSTATE};
+# Nagios monitored host check output data
+my $o_hostoutput       = $ENV{NAGIOS_HOSTOUTPUT};
+## Nagios service check output data
 my $o_serviceoutput    = $ENV{NAGIOS_SERVICEOUTPUT};
 # Nagios date when the event was recorded
 my $o_datetime         = $ENV{NAGIOS_LONGDATETIME};
@@ -255,22 +259,22 @@ my $empty_img          = "R0lGODlhAQABAJEAAAAAAP///////wAAACH5BAEAAAIALAAAAAABAA
 # ########################################################################
 # p_version returns the program version
 # ########################################################################
-sub p_version { print "$0 nagios_send_service_mail.pl version : $Version\n"; }
+sub p_version { print "$0 version : $Version\n"; }
 
 # ########################################################################
 # print_usage returns the program usage
 # ########################################################################
 sub print_usage {
     print "Usage: $0 [-v] [-V] [-h] [-t] [-H <SMTP host>] [-p <customername>]
-       [-r <to_recipients> or -g <to_group>] [-c <cc_recipients>] [-b <bcc_recipients>] 
-       [-f <text|html|multi|graph>] [-u] [-l <en|jp|fr|de|(or other languages if added)]\n";
+       [-r <to_recipients>] or -g <to_group>] [-c <cc_recipients>] [-b <bcc_recipients>] 
+       [-f <text|html|multi|graph>] [-u] [-l <en|jp|fr|de>(or other languages if added)]\n";
 }
 
 # ########################################################################
 # help returns the program help message
 # ########################################################################
 sub help {
-   print "\nNagios e-mail notification script for service events, version ",$Version,"\n";
+   print "\nNagios e-mail notification script for events, version ",$Version,"\n";
    print "This version was developed for inclusion of PNP4Nagios performance graphs.\n";
    print "GPL licence, (c)2012 Frank Migge\n\n";
    print_usage();
@@ -293,7 +297,7 @@ information, formatting the e-mail and sending it out through an SMTP gateway.
   optionally, add the customer name and contract for service providers
 -r, --to-recipients
    override the Nagios-provided \$CONTACTEMAIL\$ list of to: recipients
--g, --to-group-recipients \$CONTACTGROUPMEMBERS\$
+-g, --to-group-recipients in \$CONTACTGROUPMEMBERS\$
     instead of -r, use the list of contactgroup members and complete the mail
     address with the hard defined \$domain in this script. This is only possible
     when the contact name "abcd" works under the address "abcd\@domain".
@@ -329,10 +333,10 @@ sub verb { my $t=shift; print $t,"\n" if defined($o_verb); }
 # ########################################################################
 sub create_content_id {
   my $unique_string  = rand(100);
-  $unique_string     = $unique_string . substr(md5_hex(time()),0,23);
-  $unique_string     =~ s/(.{5})/$1\./g;
-  my $content_id     = qq(part.${unique_string}\@) . "MAIL";
-  $unique_string     = undef;
+  $unique_string  = $unique_string . substr(md5_hex(time()),0,23);
+  $unique_string  =~ s/(.{5})/$1\./g;
+  my $content_id  = qq(part.${unique_string}\@) . "MAIL";
+  $unique_string  = undef;
   return $content_id;
 }
 
@@ -341,8 +345,8 @@ sub create_content_id {
 # ########################################################################
 sub create_boundary {
   my $unique_string  = substr(md5_hex(time()),0,24);
-  $boundary          = '======' . $unique_string ;
-  $unique_string     = undef;
+  $boundary       = '======' . $unique_string ;
+  $unique_string  = undef;
 }
 
 sub unknown_arg {
@@ -377,12 +381,12 @@ sub check_options {
       'H:s'   => \$o_smtphost,        'smtphost:s'        => \$o_smtphost,
       'p:s'   => \$o_customer,        'customer:s'        => \$o_customer,
       'r:s'   => \$o_to_recipients,   'to-recipients:s'   => \$o_to_recipients,
-      'g:s'   => \$o_to_group,	    'to-group-recipients' => \$o_to_group,
+      'g:s'   => \$o_to_group,      'to-group-recipients' => \$o_to_group,
       'c:s'   => \$o_cc_recipients,   'cc-recipients:s'   => \$o_cc_recipients,
       'b:i'   => \$o_bcc_recipients,  'bcc-recipients:s'  => \$o_bcc_recipients,
       'f:s'   => \$o_format,          'format:s'          => \$o_format,
       'u'     => \$o_addurl,          'addurl'            => \$o_addurl,
-      'l:s'   => \$o_language,        'language:s'        => \$o_language
+      'l:s'   => \$o_language,        'language:s'        => \$o_language,
   ) or unknown_arg();
 
   # Basic checks
@@ -429,6 +433,7 @@ sub check_options {
 sub create_test_data {
   if (! defined($o_customer)){         $o_customer         = "ACME Corporation";}
   if (! defined($o_notificationtype)){ $o_notificationtype = "TEST";}
+  if (! defined($o_hoststate)){        $o_hoststate        = "UNKNOWN";}
   if (! defined($o_servicestate)){     $o_servicestate     = "UNKNOWN";}
   if (! defined($o_hostname)){         $o_hostname         = $test_host;}
   if (! defined($o_hostalias)){        $o_hostalias        = "Test host alias (placeholder)";}
@@ -437,10 +442,11 @@ sub create_test_data {
   if (! defined($o_servicedesc)){      $o_servicedesc      = $test_service;}
   if (! defined($o_servicegroup)){     $o_servicegroup     = "performance checks";}
   if (! defined($o_datetime)){         $o_datetime         = `date`;}
+  if (! defined($o_hostoutput)){       $o_hostoutput       = "Test output for this host";}
   if (! defined($o_serviceoutput)){    $o_serviceoutput    = "Test output for this service";}
   if (! defined($o_notificationauth)){ $o_notificationauth = "John Doe";}
   # Setting the keyword "email-debug" in the notification comment below triggers the creation of debug tables
-  if (! defined($o_notificationcmt)){  $o_notificationcmt  = "Service notification test message including email-debug";} 
+  if (! defined($o_notificationcmt)){  $o_notificationcmt  = "Notification test message including email-debug";} 
 }
 
 # ########################################################################
@@ -472,7 +478,7 @@ sub create_message_text {
        ( ($o_notificationauth ne "") && ($o_notificationcmt ne "") ) ) {
     $text_msg .= $language{$land}{'L'} . ": $o_notificationauth\n"
               .  $language{$land}{'M'} . ": $o_notificationcmt\n\n";
-    
+
   }
 
   $text_msg .= "-------------------------------------\n"
@@ -571,7 +577,7 @@ sub create_message_html {
   if (defined($graph_img) && $o_format eq "graph") {
     $graph_id = create_content_id();
     $html_msg .= "<img src=\"cid:$graph_id\">\n";
-  } 
+  }
 
   # add the Nagios footer tag line here
   $html_msg .= "<br><hr>\n$language{$land}{'O'}\n<hr>\n";
@@ -616,7 +622,7 @@ sub b64encode_img {
 # ########################################################################
 # Added by Robert Becht for request an PNP4Nagios graph via its web URL
 # ########################################################################
-sub import_pnp_graph { 
+sub import_pnp_graph {
   use LWP;
   use FileHandle;
   $tstamp = time();
@@ -676,18 +682,18 @@ sub import_pnp_graph {
 # ########################################################################
 sub set_subject {
   my $subject;
-  my $jp_b64 = "";
+  my $b64_sub = "";
 
   # special base64 encoding is required for subject parts send in Japanese
   if ($land eq "jp") {
-    $jp_b64 = " =?utf-8?B?" . encode_base64("のサービス");
-    chomp $jp_b64;
-    $jp_b64 = $jp_b64 . "?= ";
+    $b64_sub = " =?utf-8?B?" . encode_base64("のサービス");
+    chomp $b64_sub;
+    $b64_sub = $b64_sub . "?= ";
   }
 
   my %lang =  ('en' => "Nagios: $o_notificationtype service $o_servicedesc on $o_hostname ($o_hostgroup) is $o_servicestate",
                'de' => "Nagios: $o_notificationtype $o_hostname($o_hostgroup) mit Dienst $o_servicedesc ist $o_servicestate",
-               'jp' => "Nagios: $o_notificationtype $o_hostname($o_hostgroup)".$jp_b64."$o_servicedesc $o_servicestate",
+               'jp' => "Nagios: $o_notificationtype $o_hostname($o_hostgroup)".$b64_sub."$o_servicedesc $o_servicestate",
 	       'fr' => "Nagios: $o_notificationtype : le service $o_servicedesc sur $o_hostname ($o_hostgroup) est $o_servicestate" );
 
   if (!defined($lang{$land})) { $subject = $lang{'en'}; }
@@ -696,9 +702,9 @@ sub set_subject {
   return $subject;
 }
 
-# #######################################################################
+#########################################################################
 # main
-# #######################################################################
+#########################################################################
 check_options();
 if (! defined ($o_notificationtype) && ! defined($o_test)) {
   p_version();
@@ -732,10 +738,10 @@ if ($o_format eq "multi" || $o_format eq "graph") {
     verb("main: Converted inline logo to base64 and set type to $logo_type.");
     # create the second boundary marker for the logo
   } else {
+    verb("main: Could not find logo file at $logofile, setting empty logo.");
     # If the logo file cannot be found, we send a 1x1px empty logo image instead
     $logo_img = $empty_img;
     $logo_type = "gif";
-    verb("main: Could not find inline logo file at $logofile, setting empty logo image.");
   }
 
   create_boundary();
@@ -770,6 +776,7 @@ if ($o_format eq "multi" || $o_format eq "graph") {
                   . "Content-Disposition: inline; filename=\"graph.$graph_type\"\n\n"
                   . "$graph_img\n";
    }
+
    # create the final end boundary marker
    $mail_content = $mail_content . $boundary . "--\n";
    # put the completed message body into the mail
@@ -783,7 +790,7 @@ elsif ($o_format eq "html") {
   create_message_text();
   $mail{'content-type'} = qq(text/plain; charset="utf-8");
   $mail{body} = $text_msg ;
-} 
+}
 
 sendmail(%mail) or die $Mail::Sendmail::error;
 verb("Sendmail Log says:\n$Mail::Sendmail::log\n");
@@ -797,7 +804,7 @@ exit 0;
 sub create_debugtable() {
   my $varcount = 0;
   my $oddcheck = "odd";
-  
+
   # Check if the following variables are defined
   my %param_vars = (
 		'script'  => {	"title"			=>  'Script debug data',
@@ -853,10 +860,10 @@ sub create_debugtable() {
     # Data loop
     foreach $var (keys %{$param_vars{$tbl}}) {
       if ($var ne 'title') {
-        if ($varcount%2) {$oddcheck = "odd";} else {$oddcheck = "even";} 
+        if ($varcount%2) {$oddcheck = "odd";} else {$oddcheck = "even";}
         $debugtables .= "<tr><th class=$oddcheck>$var</th>";
 
-        if ((! defined(${$param_vars{$tbl}->{$var}})) || (${$param_vars{$tbl}->{$var}} eq '')) {     
+        if ((! defined(${$param_vars{$tbl}->{$var}})) || (${$param_vars{$tbl}->{$var}} eq '')) {
           $debugtables .= "<td class=$oddcheck>&nbsp;</td></tr>\n";
         } else {
           $debugtables .= "<td class=$oddcheck>${$param_vars{$tbl}->{$var}}</td></tr>\n";
@@ -866,8 +873,8 @@ sub create_debugtable() {
         $varcount++;
       }
     }
-    $debugtables .= "</table>"; 
+    $debugtables .= "</table>";
     $debugtables .="<br>\n";
   }
 }
-# ##################### End of pnp4n_send_service_mail.pl ####################
+# ##################### End of pnp4n_send_mail.pl ####################
