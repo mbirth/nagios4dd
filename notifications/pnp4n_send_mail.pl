@@ -474,11 +474,13 @@ sub create_message_text {
             . $language{$land}{"SSTATUS"} . ": $o_servicestate\n"
             . $language{$land}{"SGROUP"} . ": $o_servicegroup\n"
             . $language{$land}{"SDATA"} . ": $o_serviceoutput\n\n"
+            . $language{$land}{"HSTATUS"} . ": $o_hoststate\n"
             . $language{$land}{"HNAME"} . ": $o_hostname\n"
             . $language{$land}{"HALIAS"} . ": $o_hostalias\n"
             . $language{$land}{"HIP"} . ": $o_hostaddress\n"
             . $language{$land}{"HGROUP"} . ": $o_hostgroup\n"
-            . $language{$land}{"ETIME"} . ": $o_datetime\n\n";
+            . $language{$land}{"ETIME"} . ": $o_datetime\n"
+            . $language{$land}{"HOUTPUT"} . ": $o_hostoutput\n\n";
 
   # if author and comment data has been passed from Nagios
   # and these variables have content, then we add two more columns
@@ -502,7 +504,7 @@ sub create_message_html {
             . "<table width=$table_size><tr>\n";
 
   if ($o_format eq "multi" || $o_format eq "graph") {
-    $logo_id  = create_content_id();
+    $logo_id   = create_content_id();
     $html_msg .= "<td><img class=\"logo\" src=\"cid:$logo_id\"></td>"
               .  "<td><span>" . $language{$land}{"HEADER"} . "</span></td></tr><tr>\n";
   } else {
